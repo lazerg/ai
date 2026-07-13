@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Gateway\UploadsDocuments;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
@@ -20,6 +21,11 @@ class MistralStoreGateway implements StoreGateway, UploadsDocuments
     use Concerns\CreatesMistralClient;
     use HandlesFailoverErrors;
     use PreparesStorableFiles;
+
+    /**
+     * The maximum number of document pages to page through when deriving counts.
+     */
+    protected const MAX_DOCUMENT_PAGES = 10000;
 
     /**
      * Get a vector store by its ID.
@@ -35,7 +41,7 @@ class MistralStoreGateway implements StoreGateway, UploadsDocuments
             provider: $provider,
             id: $response->json('id'),
             name: $response->json('name'),
-            fileCounts: $this->fileCounts($provider, $response->json('id'), $response->json('nb_documents', 0)),
+            fileCounts: $this->fileCounts($provider, $response->json('id')),
             ready: true,
         );
     }
@@ -99,7 +105,11 @@ class MistralStoreGateway implements StoreGateway, UploadsDocuments
                 ->post("libraries/{$storeId}/documents", [])
         );
 
-        return $response->json('id');
+        if (! is_string($documentId = $response->json('id'))) {
+            throw new AiException("Mistral did not return a document ID when uploading to library [{$storeId}].");
+        }
+
+        return $documentId;
     }
 
     /**
@@ -131,12 +141,8 @@ class MistralStoreGateway implements StoreGateway, UploadsDocuments
     /**
      * Derive store file counts from the library's document processing statuses.
      */
-    protected function fileCounts(StoreProvider $provider, string $storeId, int $totalDocuments): StoreFileCounts
+    protected function fileCounts(StoreProvider $provider, string $storeId): StoreFileCounts
     {
-        if ($totalDocuments === 0) {
-            return new StoreFileCounts(0, 0, 0);
-        }
-
         $pageSize = 100;
         $documents = new Collection;
         $page = 0;
@@ -152,7 +158,10 @@ class MistralStoreGateway implements StoreGateway, UploadsDocuments
 
             $documents = $documents->merge($pageDocuments);
 
-            $page++;
+            // Guard against an endpoint that ignores the page cursor and never returns a short page...
+            if (++$page > self::MAX_DOCUMENT_PAGES) {
+                throw new AiException("Mistral returned more than [{$page}] document pages for library [{$storeId}].");
+            }
         } while (count($pageDocuments) === $pageSize);
 
         $statuses = $documents->countBy(fn (array $document) => match ($document['process_status'] ?? null) {

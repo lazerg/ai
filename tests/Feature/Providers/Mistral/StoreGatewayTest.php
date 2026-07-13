@@ -1,7 +1,11 @@
 <?php
 
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Events\AddingFileToStore;
+use Laravel\Ai\Events\FileAddedToStore;
+use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Stores;
 
@@ -27,6 +31,7 @@ function fakeMistralLibraryResponse(string $id = 'lib-123', string $name = 'Test
 
 test('get store fetches the library', function () {
     Http::fake([
+        'api.mistral.ai/v1/libraries/lib-123/documents*' => Http::response(['data' => []]),
         'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse()),
     ]);
 
@@ -126,6 +131,7 @@ test('get store paginates every document even when nb_documents is stale', funct
 
 test('create store posts name and description', function () {
     Http::fake([
+        'api.mistral.ai/v1/libraries/lib-123/documents*' => Http::response(['data' => []]),
         'api.mistral.ai/v1/libraries' => Http::response(fakeMistralLibraryResponse()),
         'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse()),
     ]);
@@ -142,6 +148,7 @@ test('create store posts name and description', function () {
 
 test('create store posts a falsy description', function () {
     Http::fake([
+        'api.mistral.ai/v1/libraries/lib-123/documents*' => Http::response(['data' => []]),
         'api.mistral.ai/v1/libraries' => Http::response(fakeMistralLibraryResponse()),
         'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse()),
     ]);
@@ -158,6 +165,7 @@ test('create store posts a falsy description', function () {
 
 test('create store ignores unsupported idle expiration', function () {
     Http::fake([
+        'api.mistral.ai/v1/libraries/lib-123/documents*' => Http::response(['data' => []]),
         'api.mistral.ai/v1/libraries' => Http::response(fakeMistralLibraryResponse()),
         'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse()),
     ]);
@@ -184,8 +192,9 @@ test('add file by id throws', function () {
 
 test('remove file deletes the document', function () {
     Http::fake([
-        'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse()),
         'api.mistral.ai/v1/libraries/lib-123/documents/doc-1' => Http::response([], 204),
+        'api.mistral.ai/v1/libraries/lib-123/documents*' => Http::response(['data' => []]),
+        'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse()),
     ]);
 
     $removed = Stores::get('lib-123', provider: 'mistral')->remove('doc-1');
@@ -215,6 +224,7 @@ test('adding a storable file uploads it directly to the library', function () {
             'name' => 'hello.txt',
             'process_status' => 'in_progress',
         ]),
+        'api.mistral.ai/v1/libraries/lib-123/documents*' => Http::response(['data' => []]),
         'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse()),
     ]);
 
@@ -241,6 +251,7 @@ test('adding a storable file ignores unsupported metadata', function () {
             'id' => 'doc-1',
             'process_status' => 'in_progress',
         ]),
+        'api.mistral.ai/v1/libraries/lib-123/documents*' => Http::response(['data' => []]),
         'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse()),
     ]);
 
@@ -250,3 +261,52 @@ test('adding a storable file ignores unsupported metadata', function () {
     Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/libraries/lib-123/documents')
         && collect($request->data())->pluck('name')->all() === ['file']);
 });
+
+test('get store derives counts even when nb_documents is zero', function () {
+    Http::fake([
+        'api.mistral.ai/v1/libraries/lib-123/documents*' => Http::response([
+            'data' => [
+                ['id' => 'doc-1', 'process_status' => 'in_progress'],
+            ],
+        ]),
+        // nb_documents can lag behind the documents collection under eventual consistency...
+        'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse(nbDocuments: 0)),
+    ]);
+
+    $store = Stores::get('lib-123', provider: 'mistral');
+
+    expect($store->fileCounts->pending)->toBe(1)
+        ->and($store->fileCounts->completed)->toBe(0)
+        ->and($store->fileCounts->failed)->toBe(0);
+});
+
+test('direct upload dispatches lifecycle events with a null file id', function () {
+    Http::fake([
+        'api.mistral.ai/v1/libraries/lib-123/documents' => Http::response([
+            'id' => 'doc-1',
+            'process_status' => 'in_progress',
+        ]),
+        'api.mistral.ai/v1/libraries/lib-123/documents*' => Http::response(['data' => []]),
+        'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse()),
+    ]);
+
+    Event::fake();
+
+    // A nameless document has no provider file id, so the events carry null rather than an empty string...
+    Stores::get('lib-123', provider: 'mistral')
+        ->add(Document::fromString('Hello, world!', 'text/plain'));
+
+    Event::assertDispatched(AddingFileToStore::class, fn (AddingFileToStore $e) => $e->storeId === 'lib-123' && $e->fileId === null);
+    Event::assertDispatched(FileAddedToStore::class, fn (FileAddedToStore $e) => $e->fileId === null && $e->documentId === 'doc-1');
+});
+
+test('adding a storable file throws when the upload response has no id', function () {
+    Http::fake([
+        'api.mistral.ai/v1/libraries/lib-123/documents' => Http::response(['object' => 'document']),
+        'api.mistral.ai/v1/libraries/lib-123/documents*' => Http::response(['data' => []]),
+        'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse()),
+    ]);
+
+    Stores::get('lib-123', provider: 'mistral')
+        ->add(Document::fromString('Hello, world!', 'text/plain')->as('hello.txt'));
+})->throws(AiException::class, 'did not return a document ID');

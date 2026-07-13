@@ -8,6 +8,8 @@ use RuntimeException;
 
 trait UploadsStoreDocuments
 {
+    use DispatchesFileAdditions;
+
     /**
      * Upload a document's contents directly into a vector store.
      */
@@ -19,8 +21,9 @@ trait UploadsStoreDocuments
             throw new RuntimeException('The provider\'s store gateway does not support direct document uploads.');
         }
 
+        // Direct content uploads have no separate provider file, so no file ID exists yet...
         return $this->dispatchFileAddition(
-            $storeId, $file->name() ?? '',
+            $storeId, null,
             fn () => $gateway->uploadDocument($this, $storeId, $file, $metadata),
         );
     }

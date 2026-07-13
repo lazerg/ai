@@ -43,6 +43,7 @@ class Store
                 Ai::recordFileAddition($this->id, Files::fakeIdFor($file), $originalFile);
             }
 
+            // Direct uploads have no separate stored file, so the response carries no fileId...
             return new AddedDocumentResponse(
                 $this->provider->uploadDocumentToStore($this->id, $file, $metadata),
             );
