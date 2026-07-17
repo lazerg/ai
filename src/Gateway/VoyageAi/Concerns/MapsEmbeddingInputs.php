@@ -8,11 +8,11 @@ use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\Base64Video;
-use Laravel\Ai\Files\Image as ImageFile;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\ProviderImage;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\RemoteVideo;
-use Laravel\Ai\Files\Video as VideoFile;
+use Laravel\Ai\Files\Video;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 
@@ -20,6 +20,8 @@ trait MapsEmbeddingInputs
 {
     /**
      * Determine if the model or inputs require Voyage AI's multimodal endpoint.
+     *
+     * @param  array<int, string|Image|Video>  $inputs
      */
     protected function usesMultimodalEmbeddingEndpoint(string $model, array $inputs): bool
     {
@@ -28,7 +30,10 @@ trait MapsEmbeddingInputs
     }
 
     /**
-     * Generate embeddings for text and image inputs using Voyage AI's multimodal endpoint.
+     * Generate embeddings for text, image, and video inputs using Voyage AI's multimodal endpoint.
+     *
+     * @param  array<int, string|Image|Video>  $inputs
+     * @param  array<string, mixed>  $providerOptions
      */
     protected function generateMultimodalEmbeddings(
         EmbeddingProvider $provider,
@@ -65,6 +70,8 @@ trait MapsEmbeddingInputs
 
     /**
      * Validate Voyage AI's per-request media source constraint.
+     *
+     * @param  array<int, string|Image|Video>  $inputs
      */
     protected function validateMultimodalEmbeddingInputSources(array $inputs): void
     {
@@ -95,8 +102,8 @@ trait MapsEmbeddingInputs
         return match (true) {
             $input instanceof RemoteImage,
             $input instanceof RemoteVideo => 'url',
-            $input instanceof ImageFile && $input instanceof StorableFile && ! $input instanceof ProviderImage,
-            $input instanceof VideoFile && $input instanceof StorableFile => 'base64',
+            $input instanceof Image && $input instanceof StorableFile && ! $input instanceof ProviderImage,
+            $input instanceof Video && $input instanceof StorableFile => 'base64',
             default => null,
         };
     }
@@ -106,63 +113,44 @@ trait MapsEmbeddingInputs
      */
     protected function mapMultimodalEmbeddingInput(mixed $input): array
     {
-        if (is_string($input)) {
-            return [
+        return match (true) {
+            is_string($input) => [
                 'type' => 'text',
                 'text' => $input,
-            ];
-        }
-
-        if ($input instanceof RemoteImage) {
-            return [
+            ],
+            $input instanceof RemoteImage => [
                 'type' => 'image_url',
                 'image_url' => $input->url,
-            ];
-        }
-
-        if ($input instanceof RemoteVideo) {
-            return [
+            ],
+            $input instanceof RemoteVideo => [
                 'type' => 'video_url',
                 'video_url' => $input->url,
-            ];
-        }
-
-        if ($input instanceof Base64Image) {
-            $mime = $input->mimeType() ?? 'image/png';
-
-            return [
+            ],
+            $input instanceof Base64Image => [
                 'type' => 'image_base64',
-                'image_base64' => "data:{$mime};base64,".$input->base64,
-            ];
-        }
-
-        if ($input instanceof Base64Video) {
-            $mime = $input->mimeType() ?? 'video/mp4';
-
-            return [
+                'image_base64' => $this->base64DataUri($input->mimeType() ?? 'image/png', $input->base64),
+            ],
+            $input instanceof Base64Video => [
                 'type' => 'video_base64',
-                'video_base64' => "data:{$mime};base64,".$input->base64,
-            ];
-        }
-
-        if ($input instanceof ImageFile && $input instanceof StorableFile && ! $input instanceof ProviderImage) {
-            $mime = $input->mimeType() ?? 'image/png';
-
-            return [
+                'video_base64' => $this->base64DataUri($input->mimeType() ?? 'video/mp4', $input->base64),
+            ],
+            $input instanceof Image && $input instanceof StorableFile && ! $input instanceof ProviderImage => [
                 'type' => 'image_base64',
-                'image_base64' => "data:{$mime};base64,".base64_encode($input->content()),
-            ];
-        }
-
-        if ($input instanceof VideoFile && $input instanceof StorableFile) {
-            $mime = $input->mimeType() ?? 'video/mp4';
-
-            return [
+                'image_base64' => $this->base64DataUri($input->mimeType() ?? 'image/png', base64_encode($input->content())),
+            ],
+            $input instanceof Video && $input instanceof StorableFile => [
                 'type' => 'video_base64',
-                'video_base64' => "data:{$mime};base64,".base64_encode($input->content()),
-            ];
-        }
+                'video_base64' => $this->base64DataUri($input->mimeType() ?? 'video/mp4', base64_encode($input->content())),
+            ],
+            default => throw new InvalidArgumentException('Unsupported Voyage AI multimodal embeddings input type ['.get_debug_type($input).']'),
+        };
+    }
 
-        throw new InvalidArgumentException('Unsupported Voyage AI multimodal embeddings input type ['.get_debug_type($input).']');
+    /**
+     * Format Base64 content as a data URI.
+     */
+    protected function base64DataUri(string $mime, string $base64): string
+    {
+        return "data:{$mime};base64,{$base64}";
     }
 }

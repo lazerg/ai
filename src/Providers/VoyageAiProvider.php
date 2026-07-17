@@ -8,6 +8,8 @@ use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
+use Laravel\Ai\Files\Audio;
+use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\ProviderImage;
 use Laravel\Ai\Files\Video;
@@ -43,6 +45,8 @@ class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingP
 
     /**
      * Validate embeddings inputs against Voyage AI's supported media types.
+     *
+     * @param  array<int, string|Audio|Document|Image|Video>  $inputs
      */
     protected function validateEmbeddingInputs(array $inputs, string $model): void
     {
@@ -51,8 +55,14 @@ class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingP
                 continue;
             }
 
-            if ($input instanceof Image && ! $input instanceof ProviderImage) {
-                if ($this->isVoyageMultimodalModel($model)) {
+            if ($input instanceof ProviderImage) {
+                throw new InvalidArgumentException(
+                    'Provider ['.$this->driver().'] does not support embedding provider-stored files.'
+                );
+            }
+
+            if ($input instanceof Image) {
+                if ($this->isMultimodalEmbeddingModel($model)) {
                     continue;
                 }
 
@@ -72,7 +82,7 @@ class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingP
             }
 
             throw new InvalidArgumentException(
-                'Provider [voyageai] only supports text, image, and video embeddings inputs.'
+                'Provider ['.$this->driver().'] only supports text, image, and video embeddings inputs.'
             );
         }
     }
@@ -80,7 +90,7 @@ class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingP
     /**
      * Determine if the given model supports Voyage AI multimodal embeddings.
      */
-    protected function isVoyageMultimodalModel(string $model): bool
+    protected function isMultimodalEmbeddingModel(string $model): bool
     {
         return in_array($model, ['voyage-multimodal-3.5', 'voyage-multimodal-3'], true);
     }

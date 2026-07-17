@@ -3,9 +3,11 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\Video;
 
@@ -233,6 +235,68 @@ test('multimodal embeddings allow text mixed with media inputs', function (): vo
     });
 
     expect($response->embeddings)->toHaveCount(1);
+});
+
+test('local image embeddings are sent as base64 data uris', function (): void {
+    Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
+
+    $path = __DIR__.'/../../../Fixtures/Images/red.png';
+
+    Embeddings::for([
+        Image::fromPath($path),
+    ])->dimensions(1024)->generate(provider: 'voyageai', model: 'voyage-multimodal-3.5');
+
+    Http::assertSent(function (Request $request) use ($path) {
+        $body = json_decode($request->body(), true);
+
+        return data_get($body, 'inputs.0.content.0.type') === 'image_base64'
+            && data_get($body, 'inputs.0.content.0.image_base64') === 'data:image/png;base64,'.base64_encode(file_get_contents($path));
+    });
+});
+
+test('stored video embeddings are sent as base64 data uris', function (): void {
+    Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
+
+    Storage::fake('local');
+    Storage::disk('local')->put('videos/demo.mp4', 'video-bytes');
+
+    Embeddings::for([
+        Video::fromStorage('videos/demo.mp4', 'local'),
+    ])->dimensions(1024)->generate(provider: 'voyageai', model: 'voyage-multimodal-3.5');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return data_get($body, 'inputs.0.content.0.type') === 'video_base64'
+            && data_get($body, 'inputs.0.content.0.video_base64') === 'data:video/mp4;base64,'.base64_encode('video-bytes');
+    });
+});
+
+test('audio embeddings inputs are rejected', function (): void {
+    Embeddings::for([
+        Audio::fromBase64(base64_encode('audio-bytes'), 'audio/mpeg'),
+    ])->generate(provider: 'voyageai', model: 'voyage-multimodal-3.5');
+})->throws(InvalidArgumentException::class, 'Provider [voyageai] only supports text, image, and video embeddings inputs.');
+
+test('provider-stored image embeddings inputs are rejected', function (): void {
+    Embeddings::for([
+        Image::fromId('img_123'),
+    ])->generate(provider: 'voyageai', model: 'voyage-multimodal-3.5');
+})->throws(InvalidArgumentException::class, 'Provider [voyageai] does not support embedding provider-stored files.');
+
+test('image embeddings fail over to a multimodal provider', function (): void {
+    config(['ai.providers.openai' => [
+        ...config('ai.providers.openai'),
+        'key' => 'test-key',
+    ]]);
+
+    Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
+
+    $response = Embeddings::for([
+        Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
+    ])->dimensions(1024)->generate(provider: ['openai', 'voyageai' => 'voyage-multimodal-3.5']);
+
+    expect($response->meta->provider)->toBe('voyageai');
 });
 
 test('embeddings rate limit response throws rate limited exception', function (): void {
