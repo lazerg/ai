@@ -100,7 +100,7 @@ describe('generating embeddings', function (): void {
 
         $response = Embeddings::for([
             Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
-        ])->generate();
+        ])->generate(provider: 'gemini');
 
         expect($response)->toHaveCount(1);
     });
@@ -110,7 +110,7 @@ describe('generating embeddings', function (): void {
 
         $response = Embeddings::for([
             Audio::fromBase64(base64_encode('audio-bytes'), 'audio/mpeg'),
-        ])->generate();
+        ])->generate(provider: 'gemini');
 
         expect($response)->toHaveCount(1);
     });
@@ -120,7 +120,7 @@ describe('generating embeddings', function (): void {
 
         $response = Embeddings::for([
             Document::fromBase64(base64_encode('%PDF-1.4 fake'), 'application/pdf'),
-        ])->generate();
+        ])->generate(provider: 'gemini');
 
         expect($response)->toHaveCount(1);
     });
@@ -130,12 +130,20 @@ describe('generating embeddings', function (): void {
 
         $response = Embeddings::for([
             Video::fromBase64(base64_encode('video-bytes'), 'video/mp4'),
-        ])->generate();
+        ])->generate(provider: 'gemini');
 
         expect($response)->toHaveCount(1);
     });
 
     test('non-text embeddings inputs are rejected by text-only providers', function (): void {
+        Embeddings::for([
+            Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
+        ])->generate(provider: 'openai');
+    })->throws(InvalidArgumentException::class, 'Provider [openai] only supports text embeddings inputs.');
+
+    test('non-text embeddings inputs are rejected by text-only providers when faked', function (): void {
+        Embeddings::fake();
+
         Embeddings::for([
             Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
         ])->generate(provider: 'openai');
@@ -271,7 +279,7 @@ describe('queued embeddings', function (): void {
 
         Embeddings::for([
             Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
-        ])->generate();
+        ])->generate(provider: 'gemini');
 
         Embeddings::assertGenerated(fn (EmbeddingsPrompt $prompt) => ! $prompt->contains('Hello'));
     });
@@ -332,7 +340,7 @@ describe('queued embeddings', function (): void {
 
             $request = fn () => Embeddings::for([
                 Document::fromPath($path),
-            ])->cache(60)->generate();
+            ])->cache(60)->generate(provider: 'gemini');
 
             $request();
             $request();
@@ -365,7 +373,7 @@ describe('queued embeddings', function (): void {
 
         $request = fn () => Embeddings::for([
             Document::fromUrl('https://example.com/manual.pdf'),
-        ])->cache(60)->generate();
+        ])->cache(60)->generate(provider: 'gemini');
 
         $request();
         $request();
@@ -390,7 +398,7 @@ describe('queued embeddings', function (): void {
 
         $request = fn (string $id) => Embeddings::for([
             Image::fromId($id),
-        ])->cache(60)->generate();
+        ])->cache(60)->generate(provider: 'gemini');
 
         $request('img_123');
         $request('img_123');

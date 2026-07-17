@@ -297,6 +297,21 @@ test('multimodal embeddings still accept preview model', function (): void {
         && str_contains($request->url(), 'models/gemini-embedding-2-preview:batchEmbedContents'));
 });
 
+test('non-youtube remote video embeddings are downloaded and sent as inline data', function (): void {
+    Http::fake([
+        'example.com/*' => Http::response('video-bytes', 200, ['Content-Type' => 'video/mp4']),
+        'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),
+    ]);
+
+    Embeddings::for([
+        Video::fromUrl('https://example.com/clip.mp4'),
+    ])->generate(provider: 'gemini', model: 'gemini-embedding-2');
+
+    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'batchEmbedContents')
+        && data_get($request->data(), 'requests.0.content.parts.0.inlineData.mimeType') === 'video/mp4'
+        && data_get($request->data(), 'requests.0.content.parts.0.inlineData.data') === base64_encode('video-bytes'));
+});
+
 test('remote video embeddings preserve file uris', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),

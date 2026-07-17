@@ -35,10 +35,10 @@ trait GeneratesEmbeddings
 
         $prompt = new EmbeddingsPrompt($inputs, $dimensions, $this, $model, $timeout, $providerOptions);
 
+        $this->validateEmbeddingInputs($inputs, $model);
+
         if (Ai::embeddingsAreFaked()) {
             Ai::recordEmbeddingsGeneration($prompt);
-        } else {
-            $this->validateEmbeddingInputs($inputs, $model);
         }
 
         $this->events->dispatch(new GeneratingEmbeddings(
