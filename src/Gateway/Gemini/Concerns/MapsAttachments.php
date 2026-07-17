@@ -55,7 +55,7 @@ trait MapsAttachments
             ],
             $attachment instanceof Base64Image => [
                 'inlineData' => [
-                    'mimeType' => $attachment->mime,
+                    'mimeType' => $attachment->mime ?? 'image/png',
                     'data' => $attachment->base64,
                 ],
             ],
@@ -86,7 +86,7 @@ trait MapsAttachments
             ],
             $attachment instanceof Base64Document => [
                 'inlineData' => [
-                    'mimeType' => $attachment->mime,
+                    'mimeType' => $attachment->mime ?? 'application/octet-stream',
                     'data' => $attachment->base64,
                 ],
             ],

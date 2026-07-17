@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
@@ -16,6 +17,10 @@ use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Files\Audio;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\Video;
 use Laravel\Ai\Gateway\Gemini\GeminiFileGateway;
 use Laravel\Ai\Gateway\Gemini\GeminiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
@@ -176,17 +181,19 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
 
     /**
      * Validate embeddings inputs against Gemini's supported media types.
+     *
+     * @param  array<int, string|Audio|Document|Image|Video>  $inputs
      */
     protected function validateEmbeddingInputs(array $inputs, string $model): void
     {
-        $model = str_starts_with($model, 'models/') ? substr($model, 7) : $model;
+        $model = Str::chopStart($model, 'models/');
 
         foreach ($inputs as $input) {
             if (is_string($input)) {
                 continue;
             }
 
-            if (! $this->isGeminiMultimodalEmbeddingModel($model)) {
+            if (! $this->isMultimodalEmbeddingModel($model)) {
                 throw new InvalidArgumentException(
                     "Model [{$model}] does not support Gemini multimodal embeddings. Use [gemini-embedding-2] or [gemini-embedding-2-preview]."
                 );
@@ -199,9 +206,9 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
     /**
      * Determine if the given model supports Gemini multimodal embeddings.
      */
-    protected function isGeminiMultimodalEmbeddingModel(string $model): bool
+    protected function isMultimodalEmbeddingModel(string $model): bool
     {
-        return in_array($model, ['gemini-embedding-2', 'gemini-embedding-2-preview'], true);
+        return str_starts_with($model, 'gemini-embedding-2');
     }
 
     /**

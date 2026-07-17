@@ -237,6 +237,45 @@ test('provider file embeddings are sent as file data', function (): void {
         && data_get($request->data(), 'requests.0.content.parts.0.fileData.fileUri') === 'files/file_123');
 });
 
+test('base64 image embeddings default the mime type', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),
+    ]);
+
+    Embeddings::for([
+        Image::fromBase64(base64_encode('image-bytes')),
+    ])->generate(provider: 'gemini', model: 'gemini-embedding-2');
+
+    Http::assertSent(fn (Request $request) => data_get($request->data(), 'requests.0.content.parts.0.inlineData.mimeType') === 'image/png');
+});
+
+test('remote image embeddings are downloaded and sent as inline data', function (): void {
+    Http::fake([
+        'example.com/*' => Http::response('image-bytes', 200, ['Content-Type' => 'image/png']),
+        'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),
+    ]);
+
+    Embeddings::for([
+        Image::fromUrl('https://example.com/cat.png'),
+    ])->generate(provider: 'gemini', model: 'gemini-embedding-2');
+
+    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'batchEmbedContents')
+        && data_get($request->data(), 'requests.0.content.parts.0.inlineData.mimeType') === 'image/png'
+        && data_get($request->data(), 'requests.0.content.parts.0.inlineData.data') === base64_encode('image-bytes'));
+});
+
+test('multimodal embeddings accept dated model variants', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),
+    ]);
+
+    Embeddings::for([
+        Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
+    ])->generate(provider: 'gemini', model: 'gemini-embedding-2-preview-06-05');
+
+    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'models/gemini-embedding-2-preview-06-05:batchEmbedContents'));
+});
+
 test('multimodal embeddings accept canonical model names', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),
