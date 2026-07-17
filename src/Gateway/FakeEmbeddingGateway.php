@@ -6,6 +6,10 @@ use Closure;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Files\Audio;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\Video;
 use Laravel\Ai\Prompts\EmbeddingsPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\EmbeddingsResponse;
@@ -24,7 +28,7 @@ class FakeEmbeddingGateway implements EmbeddingGateway
     /**
      * Generate embedding vectors representing the given inputs.
      *
-     * @param  string[]  $inputs
+     * @param  array<int, string|Audio|Document|Image|Video>  $inputs
      * @param  array<string, mixed>  $providerOptions
      */
     public function generateEmbeddings(

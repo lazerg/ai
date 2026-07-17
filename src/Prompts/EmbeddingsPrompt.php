@@ -5,11 +5,15 @@ namespace Laravel\Ai\Prompts;
 use Countable;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Files\Audio;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\Video;
 
 class EmbeddingsPrompt implements Countable
 {
     /**
-     * @param  string[]  $inputs
+     * @param  array<int, string|Audio|Document|Image|Video>  $inputs
      * @param  array<string, mixed>  $providerOptions
      */
     public function __construct(

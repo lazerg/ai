@@ -25,6 +25,8 @@ class LocalVideo extends Video implements Arrayable, JsonSerializable, StorableF
 
     /**
      * Get the raw representation of the file.
+     *
+     * @throws RuntimeException if the file does not exist at the configured path.
      */
     public function content(): string
     {
