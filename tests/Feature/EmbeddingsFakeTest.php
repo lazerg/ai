@@ -374,6 +374,31 @@ describe('queued embeddings', function (): void {
         Http::assertNothingSent();
     });
 
+    test('cached provider file embeddings are keyed by provider id', function () {
+        config([
+            'cache.default' => 'array',
+            'ai.caching.embeddings.store' => 'array',
+        ]);
+
+        $calls = 0;
+
+        Embeddings::fake(function () use (&$calls) {
+            $calls++;
+
+            return [array_fill(0, 100, 0.1)];
+        });
+
+        $request = fn (string $id) => Embeddings::for([
+            Image::fromId($id),
+        ])->cache(60)->generate();
+
+        $request('img_123');
+        $request('img_123');
+        $request('img_456');
+
+        expect($calls)->toBe(2);
+    });
+
     test('cached embeddings reject unsupported input types with an invalid argument exception', function () {
         config([
             'cache.default' => 'array',

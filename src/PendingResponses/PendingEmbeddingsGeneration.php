@@ -42,6 +42,9 @@ class PendingEmbeddingsGeneration
 
     protected int $timeout = 30;
 
+    /** @var array<int, string> */
+    protected array $inputContentHashes = [];
+
     /**
      * Create a new pending embeddings generation instance.
      *
@@ -146,10 +149,12 @@ class PendingEmbeddingsGeneration
                     $provider->embeddings($this->inputs, $dimensions, $model, $this->timeout, $providerOptions),
                     fn (EmbeddingsResponse $response) => $this->cacheEmbeddings($provider, $model, $dimensions, $providerOptions, $response)
                 );
-            } catch (FailoverableException $e) {
+            } catch (FailoverableException|InvalidArgumentException $e) {
                 $lastException = $e;
 
-                event(new ProviderFailedOver($provider, $model, $e));
+                if ($e instanceof FailoverableException) {
+                    event(new ProviderFailedOver($provider, $model, $e));
+                }
 
                 continue;
             }
@@ -266,7 +271,7 @@ class PendingEmbeddingsGeneration
         if (is_string($input)) {
             return [
                 'type' => 'text',
-                'value' => $input,
+                'hash' => hash('sha256', $input),
             ];
         }
 
@@ -298,7 +303,7 @@ class PendingEmbeddingsGeneration
             $input instanceof StorableFile => [
                 'type' => $type,
                 'source' => 'content',
-                'hash' => hash('sha256', $input->content()),
+                'hash' => $this->inputContentHashes[spl_object_id($input)] ??= hash('sha256', $input->content()),
                 'mime' => $input->mimeType(),
                 'name' => $input->name(),
             ],
