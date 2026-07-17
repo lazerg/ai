@@ -51,48 +51,20 @@ class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingP
     protected function validateEmbeddingInputs(array $inputs, string $model): void
     {
         foreach ($inputs as $input) {
-            if (is_string($input)) {
-                continue;
-            }
-
             if ($input instanceof ProviderImage) {
                 throw new InvalidArgumentException(
                     'Provider ['.$this->driver().'] does not support embedding provider-stored files.'
                 );
             }
 
-            if ($input instanceof Image) {
-                if ($this->isMultimodalEmbeddingModel($model)) {
-                    continue;
-                }
-
-                throw new InvalidArgumentException(
-                    "Model [{$model}] does not support Voyage AI image embeddings. Use [voyage-multimodal-3.5] or [voyage-multimodal-3]."
-                );
-            }
-
-            if ($input instanceof Video) {
-                if ($model === 'voyage-multimodal-3.5') {
-                    continue;
-                }
-
-                throw new InvalidArgumentException(
-                    "Model [{$model}] does not support Voyage AI video embeddings. Use [voyage-multimodal-3.5]."
-                );
+            if (is_string($input) || $input instanceof Image || $input instanceof Video) {
+                continue;
             }
 
             throw new InvalidArgumentException(
                 'Provider ['.$this->driver().'] only supports text, image, and video embeddings inputs.'
             );
         }
-    }
-
-    /**
-     * Determine if the given model supports Voyage AI multimodal embeddings.
-     */
-    protected function isMultimodalEmbeddingModel(string $model): bool
-    {
-        return in_array($model, ['voyage-multimodal-3.5', 'voyage-multimodal-3'], true);
     }
 
     /**

@@ -64,6 +64,10 @@ trait GeneratesEmbeddings
      */
     protected function validateEmbeddingInputs(array $inputs, string $model): void
     {
+        if ($this->supportsMultimodalEmbeddings()) {
+            return;
+        }
+
         foreach ($inputs as $input) {
             if (is_string($input)) {
                 continue;
@@ -73,5 +77,13 @@ trait GeneratesEmbeddings
                 'Provider ['.$this->driver().'] only supports text embeddings inputs.'
             );
         }
+    }
+
+    /**
+     * Determine if the provider supports multimodal embeddings inputs.
+     */
+    protected function supportsMultimodalEmbeddings(): bool
+    {
+        return false;
     }
 }

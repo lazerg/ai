@@ -3,8 +3,6 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
-use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
@@ -18,9 +16,7 @@ use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\Audio;
-use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\Image;
-use Laravel\Ai\Files\Video;
 use Laravel\Ai\Gateway\Gemini\GeminiFileGateway;
 use Laravel\Ai\Gateway\Gemini\GeminiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
@@ -180,35 +176,11 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
     }
 
     /**
-     * Validate embeddings inputs against Gemini's supported media types.
-     *
-     * @param  array<int, string|Audio|Document|Image|Video>  $inputs
+     * Determine if the provider supports multimodal embeddings inputs.
      */
-    protected function validateEmbeddingInputs(array $inputs, string $model): void
+    protected function supportsMultimodalEmbeddings(): bool
     {
-        $model = Str::chopStart($model, 'models/');
-
-        foreach ($inputs as $input) {
-            if (is_string($input)) {
-                continue;
-            }
-
-            if (! $this->isMultimodalEmbeddingModel($model)) {
-                throw new InvalidArgumentException(
-                    "Model [{$model}] does not support Gemini multimodal embeddings. Use [gemini-embedding-2] or [gemini-embedding-2-preview]."
-                );
-            }
-
-            return;
-        }
-    }
-
-    /**
-     * Determine if the given model supports Gemini multimodal embeddings.
-     */
-    protected function isMultimodalEmbeddingModel(string $model): bool
-    {
-        return str_starts_with($model, 'gemini-embedding-2');
+        return true;
     }
 
     /**

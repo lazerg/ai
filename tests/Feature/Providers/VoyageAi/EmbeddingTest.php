@@ -144,17 +144,20 @@ test('multimodal embeddings forward provider options', function (): void {
     });
 });
 
-test('image embeddings require a multimodal model', function (): void {
+test('media inputs use the multimodal endpoint regardless of model', function (): void {
+    Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
+
     Embeddings::for([
         Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
-    ])->generate(provider: 'voyageai');
-})->throws(InvalidArgumentException::class, 'voyage-multimodal-3.5');
+    ])->dimensions(1024)->generate(provider: 'voyageai');
 
-test('video embeddings require the latest multimodal model', function (): void {
-    Embeddings::for([
-        Video::fromBase64(base64_encode('video-bytes'), 'video/mp4'),
-    ])->generate(provider: 'voyageai', model: 'voyage-multimodal-3');
-})->throws(InvalidArgumentException::class, 'voyage-multimodal-3.5');
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return $request->url() === 'https://api.voyageai.com/v1/multimodalembeddings'
+            && $body['model'] === 'voyage-4';
+    });
+});
 
 test('base64 video embeddings use the multimodal endpoint', function (): void {
     Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);

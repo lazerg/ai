@@ -138,12 +138,6 @@ test('explicit dimensions are sent as outputDimensionality', function (): void {
     });
 });
 
-test('multimodal embeddings require an embedding 2 model', function (): void {
-    Embeddings::for([
-        Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
-    ])->generate(provider: 'gemini', model: 'gemini-embedding-001');
-})->throws(InvalidArgumentException::class, 'gemini-embedding-2');
-
 test('base64 image embeddings are sent as inline data', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),

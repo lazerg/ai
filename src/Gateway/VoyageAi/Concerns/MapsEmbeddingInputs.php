@@ -25,7 +25,7 @@ trait MapsEmbeddingInputs
      */
     protected function usesMultimodalEmbeddingEndpoint(string $model, array $inputs): bool
     {
-        return in_array($model, ['voyage-multimodal-3.5', 'voyage-multimodal-3'], true)
+        return str_contains($model, 'multimodal')
             || array_any($inputs, fn ($input) => ! is_string($input));
     }
 
