@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Schema;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Events\EmbeddingsGenerated;
 use Laravel\Ai\Events\GeneratingEmbeddings;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 
@@ -25,6 +26,36 @@ test('embeddings can be generated', function (string $provider, string $apiKey, 
     Event::assertDispatched(GeneratingEmbeddings::class, fn (GeneratingEmbeddings $event): bool => $event->prompt->timeout === 30);
     Event::assertDispatched(EmbeddingsGenerated::class, fn (EmbeddingsGenerated $event): bool => $event->prompt->timeout === 30);
 })->with('embedding-providers');
+
+test('multimodal embeddings can be generated using Gemini', function (): void {
+    requiresApiKey('GEMINI_API_KEY');
+
+    $response = Embeddings::for([
+        'A solid red square',
+        Image::fromPath(__DIR__.'/../Fixtures/Images/red.png'),
+    ])->generate(provider: 'gemini', model: 'gemini-embedding-2');
+
+    expect($response)->toBeInstanceOf(EmbeddingsResponse::class)
+        ->and($response->embeddings)->toHaveCount(2)
+        ->and($response->embeddings[0])->not->toBeEmpty()
+        ->and($response->embeddings[1])->not->toBeEmpty()
+        ->and($response->meta->provider)->toEqual('gemini');
+});
+
+test('multimodal embeddings can be generated using Voyage AI', function (): void {
+    requiresApiKey('VOYAGEAI_API_KEY');
+
+    $response = Embeddings::for([
+        'A solid red square',
+        Image::fromPath(__DIR__.'/../Fixtures/Images/red.png'),
+    ])->generate(provider: 'voyageai', model: 'voyage-multimodal-3');
+
+    expect($response)->toBeInstanceOf(EmbeddingsResponse::class)
+        ->and($response->embeddings)->toHaveCount(2)
+        ->and($response->embeddings[0])->toHaveCount(1024)
+        ->and($response->embeddings[1])->toHaveCount(1024)
+        ->and($response->meta->provider)->toEqual('voyageai');
+});
 
 test('embeddings can be generated with custom dimensions', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
