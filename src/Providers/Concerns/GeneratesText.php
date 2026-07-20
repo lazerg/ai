@@ -32,6 +32,7 @@ use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\McpServerTool;
 use Laravel\Ai\Tools\McpTool;
+use Laravel\Ai\Tools\ToolSearch;
 
 use function Laravel\Ai\pipeline;
 
@@ -160,10 +161,19 @@ trait GeneratesText
             return [];
         }
 
-        return array_map(
-            fn ($tool) => $this->resolveTool($tool),
-            [...$agent->tools()],
-        );
+        $tools = [];
+
+        foreach ($agent->tools() as $tool) {
+            if ($tool instanceof ToolSearch) {
+                array_push($tools, ...$tool->expand(fn ($catalogTool) => $this->resolveTool($catalogTool)));
+
+                continue;
+            }
+
+            $tools[] = $this->resolveTool($tool);
+        }
+
+        return $tools;
     }
 
     /**

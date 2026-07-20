@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Concerns;
 
 use Closure;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Tools\ExecuteTool;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
 
@@ -34,6 +35,10 @@ trait InvokesTools
      */
     protected function executeTool(Tool $tool, array $arguments, ?string $toolCallId = null): string
     {
+        if ($tool instanceof ExecuteTool) {
+            $tool->invokeUsing(fn (Tool $target, array $targetArguments): string => $this->executeTool($target, $targetArguments, $toolCallId));
+        }
+
         $callbacks = $this->pushToolInvocationCallbacks();
 
         try {

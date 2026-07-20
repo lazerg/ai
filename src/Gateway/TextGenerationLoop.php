@@ -32,6 +32,7 @@ use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
+use Laravel\Ai\Tools\ExecuteTool;
 use Laravel\Ai\Tools\Request;
 use Throwable;
 
@@ -286,6 +287,9 @@ class TextGenerationLoop
     /**
      * Resolve the step budget: explicit `maxSteps`, else 1.5x tools, else 5.
      *
+     * A deferred tool executor counts its catalog toward the budget, capped so a very
+     * large catalog cannot inflate the budget into a runaway loop.
+     *
      * @param  Tool[]  $tools
      */
     protected function resolveMaxSteps(?TextGenerationOptions $options, array $tools): int
@@ -294,7 +298,17 @@ class TextGenerationLoop
             return max(1, $options->maxSteps);
         }
 
-        return $tools !== [] ? (int) round(count($tools) * 1.5) : 5;
+        if ($tools === []) {
+            return 5;
+        }
+
+        $count = 0;
+
+        foreach ($tools as $tool) {
+            $count += $tool instanceof ExecuteTool ? 1 + min($tool->catalogSize(), 24) : 1;
+        }
+
+        return (int) round($count * 1.5);
     }
 
     /**
